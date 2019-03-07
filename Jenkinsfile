@@ -3,7 +3,7 @@ def templateName = 'dotnet'
 pipeline {
   agent {
     node {
-      label 'any' 
+      label 'dotnet' 
     }
   }
   options {
