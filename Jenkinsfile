@@ -1,69 +1,72 @@
-def templateName = 'dotnet' 
+def templateName = 'dotnet'
+def project = 'dev-monolith-a314'
 
 pipeline {
   agent any
-  options {
-    timeout(time: 20, unit: 'MINUTES') 
-  }
   stages {
-    stage('preamble') {
-        steps {
-            script {
-                openshift.verbose()
-                openshift.withCluster() {
-                    openshift.withProject('dev-monolith-a314') {
-                        echo "Using project: ${openshift.project()}"
-                    }
-                }
+    stage('Create Image Builder') {
+      when {
+        expression {
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              return !openshift.selector("bc", templateName).exists();
             }
+          }
         }
-    }
-
-    stage('build') {
+      }
       steps {
         script {
-            openshift.verbose()
-            openshift.withCluster() {
-                openshift.withProject('dev-monolith-a314') {
-                  def builds = openshift.selector("bc", templateName).related('builds')
-                  timeout(5) { 
-                    builds.untilEach(1) {
-                      return (it.object().status.phase == "Complete")
-                    }
-                  }
-                }
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              openshift.newBuild("--name=${templateName}", "--image-stream=dotnet:2.1")
             }
+          }
         }
       }
     }
-
-    stage('deploy') {
+    stage('Build Image') {
       steps {
         script {
-            openshift.verbose()
-            openshift.withCluster('dev-monolith-a314') {
-                openshift.withProject() {
-                  def rm = openshift.selector("dc", templateName).rollout()
-                  timeout(5) { 
-                    openshift.selector("dc", templateName).related('pods').untilEach(1) {
-                      return (it.object().status.phase == "Running")
-                    }
-                  }
-                }
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              openshift.selector("bc", templateName).startBuild("--wait=true")
             }
+          }
         }
       }
     }
-
-    stage('tag') {
+    stage('Create DEV') {
+      when {
+        expression {
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              return !openshift.selector('dc', templateName).exists()
+            }
+          }
+        }
+      }
       steps {
         script {
-            openshift.verbose()
-            openshift.withCluster('dev-monolith-a314') {
-                openshift.withProject() {
-                  openshift.tag("${templateName}:latest", "${templateName}-staging:latest") 
-                }
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              def dc = openshift.selector("dc", templateName)
+              while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
+                  sleep 10
+              }
+              openshift.set("triggers", "dc/${templateName}", "--manual")
             }
+          }
+        }
+      }
+    }
+    stage('Deploy DEV') {
+      steps {
+        script {
+          openshift.withCluster() {
+            openshift.withProject(project) {
+              openshift.selector("dc", templateName).rollout().latest();
+            }
+          }
         }
       }
     }
