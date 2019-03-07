@@ -2,9 +2,7 @@ def templateName = 'dotnet'
 
 pipeline {
   agent {
-    node {
-      label 'dotnet' 
-    }
+    any
   }
   options {
     timeout(time: 20, unit: 'MINUTES') 
