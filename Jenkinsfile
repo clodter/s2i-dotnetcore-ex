@@ -12,7 +12,7 @@ pipeline {
                 openshift.verbose()
                 openshift.withCluster() {
                     openshift.withProject('dev-monolith-a314') {
-                        echo "Using project: ${openshift.project('dev-monolith-a314')}"
+                        echo "Using project: ${openshift.project()}"
                     }
                 }
             }
